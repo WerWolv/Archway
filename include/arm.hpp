@@ -34,7 +34,7 @@ constexpr u64 operator""_GiB(u64 value) {
     return operator""_MiB(value) * 1024;
 }
 
-#define BIT(bit) BITS(bit:bit)
+#define BIT(bit) bit, bit
 #define BITS(range) std::max(true ? range, false ? range), std::min(true ? range, false ? range)
 
 template<u8 from, u8 to>

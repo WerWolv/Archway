@@ -15,6 +15,13 @@ namespace arm {
     class Core;
     using InstructionHandler = void (Core::*)(const inst_t &inst, const u8 &Rd, const u8 &Rn, const u8 &Rm, const bool &sf, const u8 &imm3, const u8 &imm6, const u16 &imm12, const u8 &shift, const u8 &size);
 
+    struct InstructionPattern {
+        u32 mask;
+        u32 pattern;
+        InstructionHandler type;
+        const char *name;
+    };
+
     struct PSTATE {
         u8 N : 1;
         u8 Z : 1;
@@ -68,12 +75,14 @@ namespace arm {
         u8 N : 1;
     };
 
-    struct InstructionPattern {
-        u32 mask;
-        u32 pattern;
-        InstructionHandler type;
-        const char *name;
-    };
+    #define CURR_EL PSTATE.EL
+    #define EL0 0
+    #define EL1 1
+    #define EL2 2
+    #define EL3 3
+
+    constexpr u8 NumBreakpoints = 0x10;
+    constexpr u8 TemporarySteppingBreakpointId = NumBreakpoints;
 
     class Core {
     public:
@@ -87,23 +96,34 @@ namespace arm {
         [[nodiscard]] InstructionHandler decode(const inst_t &instruction) const;
         void execute(const InstructionHandler &type, const inst_t &instruction);
 
-        void dumpRegisters() const;
+        /* Debug commands */
+        void enterDebugMode();
+        void exitDebugMode();
+        void breakCore();
+        void continueCore();
+        [[nodiscard]] u8 setBreakpoint(addr_t address);
+        void removeBreakpoint(u8 breakpointId);
+        void singleStep();
+        void dumpRegisters();
 
     private:
         void setNZCVFlags(u32 oldValue, u32 newValue);
         void setNZCVFlags(u64 oldValue, u64 newValue);
-        bool doesConditionHold(u8 cond) const;
-        u64 extendRegister(u64 reg, u8 type, u8 shift) const;
+        [[nodiscard]] bool doesConditionHold(u8 cond) const;
+        [[nodiscard]] u64 decodeImmediateWMask(u32 N, u32 imms, u32 immr);
 
         bool m_halted = false;
-
         AddressSpace *m_addressSpace = nullptr;
+
+        /* Debug */
+        bool m_broken = false;
+        bool m_debugMode = false;
+        std::array<std::optional<addr_t>, NumBreakpoints + 1> m_breakpoints;
 
         /* Core Registers */
 
-        core::RegisterDouble GPR[31];
+        core::GPRegister GPR;
         core::ELRegister SP;
-        core::ZRegister  ZR;
         core::RegisterSingle PC;
 
         PSTATE PSTATE;

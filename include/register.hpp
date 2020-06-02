@@ -6,8 +6,13 @@
 
 namespace arm::core {
 
+#define EL0(x) arm::core::EL(0, x)
+#define EL1(x) arm::core::EL(1, x)
+#define EL2(x) arm::core::EL(2, x)
+#define EL3(x) arm::core::EL(3, x)
+
     struct Register {
-        virtual operator u64() = 0;
+        virtual operator u64() const = 0;
         virtual Register& operator=(u64 value) = 0;
     };
 
@@ -20,7 +25,7 @@ namespace arm::core {
             u32 X;
         };
 
-        virtual operator u64() override { return this->W; }
+        virtual operator u64() const override { return this->W; }
         virtual Register& operator=(u64 value) override { this->W = value; return *this; }
     };
 
@@ -30,9 +35,7 @@ namespace arm::core {
 
         u64 W;
 
-        virtual operator u64() {
-            return this->W;
-        }
+        virtual operator u64() const override { return this->W; }
 
         virtual Register& operator=(u64 value) override { this->W = value; return *this; }
 
@@ -70,14 +73,14 @@ namespace arm::core {
         ZRegister& operator=(RegisterSingle &other) { return *this; }
         ZRegister& operator=(T &other) { return *this; }
 
-        operator T() { return 0; }
+        operator T() const { return 0; }
 
         static_assert(std::is_same_v<T, u32> || std::is_same_v<T, u64>, "Invalid zero register size.");
     };
 
-    struct ZRegister : public Register {
+    struct ZRegister : public RegisterDouble {
         ZRegister(){}
-        virtual operator u64() override { return 0; }
+        virtual operator u64() const override { return 0; }
         virtual ZRegister& operator=(u64 value) override { return *this; }
 
         ZRegisterImpl<u64> W;
@@ -86,41 +89,45 @@ namespace arm::core {
 
     class ELRegister;
 
-    template<u8 el>
     struct EL : public Register {
     public:
-        EL() : value(0) {}
-        EL(u64 value) : value(value) { }
+        EL() : m_el(0), m_value(0) {}
+        EL(u8 el, u64 value) : m_el(el), m_value(value) { }
+
+        const u8 getEL() const { return this->m_el; }
 
     private:
         friend ELRegister;
 
-        virtual operator u64() override { return this->value; }
-        virtual EL& operator=(u64 value) override { this->value = value; return *this; }
+        virtual operator u64() const override { return this->m_value; }
+        virtual EL& operator=(u64 value) override { this->m_value = value; return *this; }
 
-
-        u64 value;
-
-        static_assert(el <= 3, "Exception Level out of range.");
+        u8 m_el;
+        u64 m_value;
     };
 
     class ELRegister {
     public:
-        template<u8 el>
-        ELRegister& operator=(EL<el> value) {
-            reg[el] = value;
-
-            return *this;
+        u64& operator[](u8 el) {
+            return this->m_reg[el];
         }
-
     private:
-        u64 reg[4];
+        u64 m_reg[4];
     };
 
-    using EL0 = EL<0>;
-    using EL1 = EL<1>;
-    using EL2 = EL<2>;
-    using EL3 = EL<3>;
+
+    class GPRegister {
+    public:
+        core::RegisterDouble& operator[](u8 R) {
+            if (R < 31)
+                return GPR[R];
+            else
+                return ZR;
+        }
+    private:
+        core::RegisterDouble GPR[31];
+        core::ZRegister ZR;
+    };
 
 }
 
