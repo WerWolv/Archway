@@ -20,7 +20,7 @@ using addr_t = std::uint64_t;
 using offset_t = std::int32_t;
 using inst_t = std::uint32_t;
 
-constexpr size_t InstructionWidth = sizeof(inst_t);
+constexpr u64 InstructionWidth = sizeof(inst_t);
 
 constexpr u64 operator""_kiB(u64 value) {
     return value * 1024;
@@ -38,7 +38,7 @@ constexpr u64 operator""_GiB(u64 value) {
 #define BITS(range) std::max(true ? range, false ? range), std::min(true ? range, false ? range)
 
 template<u8 from, u8 to>
-[[nodiscard]] constexpr u64 extract(const u64 &&value) {
+[[nodiscard]] constexpr u64 extract(const u64 &value) {
     u64 mask = (std::numeric_limits<u64>::max() >> (63 - (from - to))) << to;
     return (value & mask) >> to;
 }

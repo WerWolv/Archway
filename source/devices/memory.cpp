@@ -30,7 +30,7 @@ namespace arm::dev {
         if (offset + size >= this->getSize())
             Logger::fatal("Tried to access an invalid address at BASE + %016llx!", offset);
         if (size > sizeof(u64))
-            Logger::fatal("Tried to write more than 8 bytes: %u", size);
+            Logger::fatal("Tried to write more than 8 bytes: %u!", size);
 
         memcpy(&this->m_memory[offset], &value, size);
     }
@@ -38,14 +38,14 @@ namespace arm::dev {
     void Memory::load(const std::string &path) {
         FILE *file = fopen(path.c_str(), "r");
         if (file == nullptr)
-            return;
+            Logger::fatal("File " + path + " cannot be read!");
 
         fseek(file, 0, SEEK_END);
         size_t fileSize = ftell(file);
         rewind(file);
 
         if (fileSize > this->getSize())
-            return;
+            Logger::fatal("File content of size 0x%lX does not fit into memory region of size 0x%lX!", fileSize, this->getSize());
 
         fread(this->m_memory, 1, fileSize, file);
         fclose(file);
@@ -55,7 +55,7 @@ namespace arm::dev {
         addr_t address = 0;
 
         if (instructions.size() * InstructionWidth > this->getSize())
-            return;
+            Logger::fatal("Instructions with total size of 0x%lX does not fit into memory region of size 0x%lX!");
 
         for (const auto& instruction : instructions) {
             this->write(address, InstructionWidth, instruction);

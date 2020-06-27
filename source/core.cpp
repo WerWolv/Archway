@@ -4,7 +4,7 @@
 namespace arm {
 
     Core::Core(AddressSpace *addressSpace) : m_addressSpace(addressSpace) {
-        PC = 0x10000;
+        PC = 0x0000;
     }
 
     constexpr auto Core::getInstructionPatternLUT() const {
@@ -45,7 +45,7 @@ namespace arm {
         return inst_t(this->m_addressSpace->read(pc, InstructionWidth));
     }
 
-    InstructionHandler Core::decode(const inst_t &instruction) const {
+    InstructionHandler Core::decode(const inst_t &instruction) {
         for (const auto& entry : getInstructionPatternLUT()) {
             if ((instruction & entry.mask) == entry.pattern) {
                 Logger::debug("[%08llx] %s", PC.W, entry.name);
@@ -53,6 +53,7 @@ namespace arm {
             }
         }
 
+        dumpRegisters();
         Logger::fatal("Invalid instruction 0x%08llx!", instruction);
 
         return nullptr;
@@ -109,7 +110,7 @@ namespace arm {
         Logger::info("== Register Dump ==");
         Logger::info(" N: %u Z: %u C: %u V: %u", PSTATE.N, PSTATE.Z, PSTATE.C, PSTATE.V);
         Logger::info(" PC:  0x%016llx", PC.W);
-        Logger::info(" SP:  0x%016llx", SP);
+        Logger::info(" SP:  0x%016llx", GPSP(31).W);
         for (u8 i = 0; i < 31; i++)
             Logger::info(" W%02u: 0x%016llx", i, GPR[i].W);
     }
@@ -229,32 +230,32 @@ namespace arm {
 
     INSTRUCTION_DEF(ORR_IMMEDIATE) {
         if (sf == 0)
-            GPR[Rd].X = GPR[Rn].X | imm6;
+            GPSP(Rd).X = GPZR(Rn).X | imm6;
         else
-            GPR[Rd].W = GPR[Rn].W | imm6;
+            GPSP(Rd).W = GPZR(Rn).W | imm6;
     }
 
     INSTRUCTION_DEF(ORR_SHIFTED_REGISTER) {
         if (sf == 0) {
             u32 operand2;
             switch (shift) {
-                case 0b00: operand2 = GPR[Rm].X << imm6; break;
-                case 0b01: operand2 = GPR[Rm].X >> imm6; break;
-                case 0b10: operand2 = s32(GPR[Rm].X) >> imm6; break;
-                case 0b11: operand2 = std::rotr(GPR[Rm].X, imm6); break;
+                case 0b00: operand2 = GPZR(Rm).X << imm6; break;
+                case 0b01: operand2 = GPZR(Rm).X >> imm6; break;
+                case 0b10: operand2 = s32(GPZR(Rm).X) >> imm6; break;
+                case 0b11: operand2 = std::rotr(GPZR(Rm).X, imm6); break;
 
             }
-            GPR[Rd].X = GPR[Rn].X | operand2;
+            GPZR(Rd).X = GPZR(Rn).X | operand2;
         } else {
             u64 operand2;
             switch (shift) {
-                case 0b00: operand2 = GPR[Rm].W << imm6; break;
-                case 0b01: operand2 = GPR[Rm].W >> imm6; break;
-                case 0b10: operand2 = s64(GPR[Rm].W) >> imm6; break;
-                case 0b11: operand2 = std::rotr(GPR[Rm].W, imm6); break;
+                case 0b00: operand2 = GPZR(Rm).W << imm6; break;
+                case 0b01: operand2 = GPZR(Rm).W >> imm6; break;
+                case 0b10: operand2 = s64(GPZR(Rm).W) >> imm6; break;
+                case 0b11: operand2 = std::rotr(GPZR(Rm).W, imm6); break;
 
             }
-            GPR[Rd].W = GPR[Rn].W | operand2;
+            GPZR(Rd).W = GPZR(Rn).W | operand2;
         }
     }
 
@@ -263,9 +264,9 @@ namespace arm {
         u8 hw = extract<BITS(21:22)>(inst);
 
         if (sf == 0)
-            GPR[Rd].X = u32(imm16) << (hw << 4);
+            GPZR(Rd).X = u32(imm16) << (hw << 4);
         else
-            GPR[Rd].W = u64(imm16) << (hw << 4);
+            GPZR(Rd).W = u64(imm16) << (hw << 4);
     }
 
     INSTRUCTION_DEF(B) {
@@ -297,25 +298,25 @@ namespace arm {
         }
 
         if (sf == 0) {
-            u32 result = GPR[Rn].X + operand2;
-            GPR[Rd].X = result;
+            u32 result = GPSP(Rn).X + operand2;
+            GPSP(Rd).X = result;
         } else {
-            u64 result = GPR[Rn].W + operand2;
-            GPR[Rd].W = result;
+            u64 result = GPSP(Rn).W + operand2;
+            GPSP(Rd).W = result;
         }
     }
 
     INSTRUCTION_DEF(ADD_SHIFTED_REGISTER) {
         u32 operand2 = 0;
         switch (shift) {
-            case 0b00: operand2 = GPR[Rm]; break;
-            case 0b01: operand2 = GPR[Rm] << 12; break;
+            case 0b00: operand2 = GPZR(Rm); break;
+            case 0b01: operand2 = GPZR(Rm) << 12; break;
         }
 
         if (sf == 0) {
-            GPR[Rd].X = GPR[Rn].X + operand2;
+            GPZR(Rd).X = GPZR(Rn).X + operand2;
         } else {
-            GPR[Rd].W = GPR[Rn].W + operand2;
+            GPZR(Rd).W = GPZR(Rn).W + operand2;
         }
     }
 
@@ -327,13 +328,13 @@ namespace arm {
         }
 
         if (sf == 0) {
-            u32 result = GPR[Rn].X + operand2;
-            Core::setNZCVFlags(GPR[Rd].X, result);
-            GPR[Rd].X = result;
+            u32 result = GPSP(Rn).X + operand2;
+            Core::setNZCVFlags(GPZR(Rd).X, result);
+            GPZR(Rd).X = result;
         } else {
-            u64 result = GPR[Rn].W + operand2;
-            Core::setNZCVFlags(GPR[Rd].W, result);
-            GPR[Rd].W = result;
+            u64 result = GPSP(Rn).W + operand2;
+            Core::setNZCVFlags(GPZR(Rd).W, result);
+            GPZR(Rd).W = result;
         }
     }
 
@@ -345,23 +346,23 @@ namespace arm {
         }
 
         if (sf == 0) {
-            GPR[Rd].X = GPR[Rn].X - operand2;
+            GPSP(Rd).X = GPSP(Rn).X - operand2;
         } else {
-            GPR[Rd].W = GPR[Rn].W - operand2;
+            GPSP(Rd).W = GPSP(Rn).W - operand2;
         }
     }
 
     INSTRUCTION_DEF(SUB_SHIFTED_REGISTER) {
         u32 operand2 = 0;
         switch (shift) {
-            case 0b00: operand2 = GPR[Rm]; break;
-            case 0b01: operand2 = GPR[Rm] << 12; break;
+            case 0b00: operand2 = GPZR(Rm); break;
+            case 0b01: operand2 = GPZR(Rm) << 12; break;
         }
 
         if (sf == 0) {
-            GPR[Rd].X = GPR[Rn].X - operand2;
+            GPZR(Rd).X = GPZR(Rn).X - operand2;
         } else {
-            GPR[Rd].W = GPR[Rn].W - operand2;
+            GPZR(Rd).W = GPZR(Rn).W - operand2;
         }
     }
 
@@ -373,31 +374,31 @@ namespace arm {
         }
 
         if (sf == 0) {
-            u32 result = GPR[Rn].X - operand2;
-            Core::setNZCVFlags(GPR[Rd].X, result);
-            GPR[Rd].X = result;
+            u32 result = GPSP(Rn).X - operand2;
+            Core::setNZCVFlags(GPZR(Rd).X, result);
+            GPZR(Rd).X = result;
         } else {
-            u64 result = GPR[Rn].W - operand2;
-            Core::setNZCVFlags(GPR[Rd].W, result);
-            GPR[Rd].W = result;
+            u64 result = GPSP(Rn).W - operand2;
+            Core::setNZCVFlags(GPZR(Rd).W, result);
+            GPZR(Rd).W = result;
         }
     }
 
     INSTRUCTION_DEF(SUBS_SHIFTED_REGISTER) {
         u32 operand2 = 0;
         switch (shift) {
-            case 0b00: operand2 = GPR[Rm]; break;
-            case 0b01: operand2 = GPR[Rm] << 12; break;
+            case 0b00: operand2 = GPZR(Rm); break;
+            case 0b01: operand2 = GPZR(Rm) << 12; break;
         }
 
         if (sf == 0) {
-            u32 result = GPR[Rn].X - operand2;
-            Core::setNZCVFlags(GPR[Rd].X, result);
-            GPR[Rd].X = result;
+            u32 result = GPZR(Rn).X - operand2;
+            Core::setNZCVFlags(GPZR(Rd).X, result);
+            GPZR(Rd).X = result;
         } else {
-            u64 result = GPR[Rn].X - operand2;
-            Core::setNZCVFlags(GPR[Rd].W, result);
-            GPR[Rd].W = result;
+            u64 result = GPZR(Rn).X - operand2;
+            Core::setNZCVFlags(GPZR(Rd).W, result);
+            GPZR(Rd).W = result;
         }
     }
 
@@ -412,11 +413,11 @@ namespace arm {
 
         if (Core::doesConditionHold(cond)) {
             if (sf == 0) {
-                u32 result = GPR[Rn].X + imm5;
-                Core::setNZCVFlags(GPR[Rn].X, result);
+                u32 result = GPZR(Rn).X + imm5;
+                Core::setNZCVFlags(GPZR(Rn).X, result);
             } else {
-                u64 result = GPR[Rn].W + imm5;
-                Core::setNZCVFlags(GPR[Rn].W, result);
+                u64 result = GPZR(Rn).W + imm5;
+                Core::setNZCVFlags(GPZR(Rn).W, result);
             }
         } else {
             PSTATE.N = extract<BIT(3)>(nzcv);
@@ -432,11 +433,11 @@ namespace arm {
 
         if (Core::doesConditionHold(cond)) {
             if (sf == 0) {
-                u32 result = GPR[Rn].X + GPR[Rm].X;
-                Core::setNZCVFlags(GPR[Rn].X, result);
+                u32 result = GPZR(Rn).X + GPZR(Rm).X;
+                Core::setNZCVFlags(GPZR(Rn).X, result);
             } else {
-                u64 result = GPR[Rn].W + GPR[Rm].W;
-                Core::setNZCVFlags(GPR[Rn].W, result);
+                u64 result = GPZR(Rn).W + GPZR(Rm).W;
+                Core::setNZCVFlags(GPZR(Rn).W, result);
             }
         } else {
             PSTATE.N = extract<BIT(3)>(nzcv);
@@ -454,16 +455,16 @@ namespace arm {
     INSTRUCTION_DEF(ADRP) {
         s64 imm = extendSign(((extract<BITS(5:23)>(inst) << 2) | extract<BITS(29:30)>(inst)) << 12, 33, 64);
 
-        GPR[Rd] = (PC & 0xFFF) + imm;
+        GPZR(Rd) = (PC & 0xFFF) + imm;
     }
 
     INSTRUCTION_DEF(AND_IMMEDIATE) {
         if (sf == 0) {
             u32 imm = extendSign(decodeImmediateWMask(0, extract<BITS(10:15)>(inst), extract<BITS(16:21)>(inst)), 12, 32);
-            GPR[Rd].X = GPR[Rn].X & imm;
+            GPSP(Rd).X = GPZR(Rd).X & imm;
         } else {
             u64 imm = decodeImmediateWMask(extract<BIT(22)>(inst), extract<BITS(10:15)>(inst), extract<BITS(16:21)>(inst));
-            GPR[Rd].W = GPR[Rn].W & imm;
+            GPSP(Rd).W = GPZR(Rd).W & imm;
         }
     }
 
@@ -471,37 +472,37 @@ namespace arm {
         if (sf == 0) {
             u32 operand2;
             switch (shift) {
-                case 0b00: operand2 = GPR[Rm].X << imm6; break;
-                case 0b01: operand2 = GPR[Rm].X >> imm6; break;
-                case 0b10: operand2 = s32(GPR[Rm].X) >> imm6; break;
-                case 0b11: operand2 = std::rotr(GPR[Rm].X, imm6); break;
+                case 0b00: operand2 = GPZR(Rm).X << imm6; break;
+                case 0b01: operand2 = GPZR(Rm).X >> imm6; break;
+                case 0b10: operand2 = s32(GPZR(Rm).X) >> imm6; break;
+                case 0b11: operand2 = std::rotr(GPZR(Rm).X, imm6); break;
 
             }
-            GPR[Rd].X = GPR[Rn].X & operand2;
+            GPZR(Rd).X = GPZR(Rn).X & operand2;
         } else {
             u64 operand2;
             switch (shift) {
-                case 0b00: operand2 = GPR[Rm].W << imm6; break;
-                case 0b01: operand2 = GPR[Rm].W >> imm6; break;
-                case 0b10: operand2 = s64(GPR[Rm].W) >> imm6; break;
-                case 0b11: operand2 = std::rotr(GPR[Rm].W, imm6); break;
+                case 0b00: operand2 = GPZR(Rm).W << imm6; break;
+                case 0b01: operand2 = GPZR(Rm).W >> imm6; break;
+                case 0b10: operand2 = s64(GPZR(Rm).W) >> imm6; break;
+                case 0b11: operand2 = std::rotr(GPZR(Rm).W, imm6); break;
 
             }
-            GPR[Rd].W = GPR[Rn].W & operand2;
+            GPZR(Rd).W = GPZR(Rn).W & operand2;
         }
     }
 
     INSTRUCTION_DEF(ANDS_IMMEDIATE) {
         if (sf == 0) {
             u32 imm = (extract<BITS(10:15)>(inst) << 6) | extract<BITS(16:21)>(inst);
-            u32 result = GPR[Rn].X & imm;
-            Core::setNZCVFlags(GPR[Rd].X, result);
-            GPR[Rd].X = result;
+            u32 result = GPZR(Rn).X & imm;
+            Core::setNZCVFlags(GPZR(Rd).X, result);
+            GPZR(Rd).X = result;
         } else {
             u64 imm = (extract<BIT(22)>(inst) << 12) | (extract<BITS(10:15)>(inst) << 6) | extract<BITS(16:21)>(inst);
-            u64 result = GPR[Rn].W & imm;
-            Core::setNZCVFlags(GPR[Rd].W, result);
-            GPR[Rd].W = result;
+            u64 result = GPZR(Rn).W & imm;
+            Core::setNZCVFlags(GPZR(Rd).W, result);
+            GPZR(Rd).W = result;
         }
     }
 
@@ -509,27 +510,27 @@ namespace arm {
         if (sf == 0) {
             u32 operand2;
             switch (shift) {
-                case 0b00: operand2 = GPR[Rm].X << imm6; break;
-                case 0b01: operand2 = GPR[Rm].X >> imm6; break;
-                case 0b10: operand2 = s32(GPR[Rm].X) >> imm6; break;
-                case 0b11: operand2 = std::rotr(GPR[Rm].X, imm6); break;
+                case 0b00: operand2 = GPZR(Rm).X << imm6; break;
+                case 0b01: operand2 = GPZR(Rm).X >> imm6; break;
+                case 0b10: operand2 = s32(GPZR(Rm).X) >> imm6; break;
+                case 0b11: operand2 = std::rotr(GPZR(Rm).X, imm6); break;
 
             }
-            u32 result = GPR[Rn].X & operand2;
-            Core::setNZCVFlags(GPR[Rd].X, result);
-            GPR[Rd].X = result;
+            u32 result = GPZR(Rn).X & operand2;
+            Core::setNZCVFlags(GPZR(Rd).X, result);
+            GPZR(Rd).X = result;
         } else {
             u64 operand2;
             switch (shift) {
-                case 0b00: operand2 = GPR[Rm].W << imm6; break;
-                case 0b01: operand2 = GPR[Rm].W >> imm6; break;
-                case 0b10: operand2 = s64(GPR[Rm].W) >> imm6; break;
-                case 0b11: operand2 = std::rotr(GPR[Rm].W, imm6); break;
+                case 0b00: operand2 = GPZR(Rm).W << imm6; break;
+                case 0b01: operand2 = GPZR(Rm).W >> imm6; break;
+                case 0b10: operand2 = s64(GPZR(Rm).W) >> imm6; break;
+                case 0b11: operand2 = std::rotr(GPZR(Rm).W, imm6); break;
 
             }
-            u64 result = GPR[Rn].W & operand2;
-            Core::setNZCVFlags(GPR[Rd].W, result);
-            GPR[Rd].W = result;
+            u64 result = GPZR(Rn).W & operand2;
+            Core::setNZCVFlags(GPZR(Rd).W, result);
+            GPZR(Rd).W = result;
         }
     }
 
@@ -540,25 +541,25 @@ namespace arm {
 
         if (extract<BITS(24:25)>(inst) == 0b00 && extract<BITS(10:11)>(inst) == 0b01) { // Post-index
             s64 offset = extendSign(imm9, 9, 64);
-            this->m_addressSpace->write(GPR[Rn].W, 1U << scale, GPR[Rt].W);
+            this->m_addressSpace->write(GPSP(Rn).W, 1U << scale, GPZR(Rt).W);
 
             if (scale == 0b10)
-                GPR[Rn].X += offset;
+                GPSP(Rn).X += offset;
             else
-                GPR[Rn].W += offset;
+                GPSP(Rn).W += offset;
         } else if (extract<BITS(24:25)>(inst) == 0b00 && extract<BITS(10:11)>(inst) == 0b11) { // Pre-index {
             s64 offset = extendSign(imm9, 9, 64);
 
             if (scale == 0b10)
-                GPR[Rn].X += offset;
+                GPSP(Rn).X += offset;
             else
-                GPR[Rn].W += offset;
+                GPSP(Rn).W += offset;
 
-            this->m_addressSpace->write(GPR[Rn].W, 1U << scale, GPR[Rt].W);
+            this->m_addressSpace->write(GPSP(Rn).W, 1U << scale, GPZR(Rt).W);
         } else if (extract<BITS(24:25)>(inst) == 0b01) { // Unsigned offset
             s64 offset = extendSign(extract<BITS(10:21)>(inst), 12, 64) << scale;
 
-            this->m_addressSpace->write(GPR[Rn].W + offset, 1U << scale, GPR[Rt].W);
+            this->m_addressSpace->write(GPSP(Rn).W + offset, 1U << scale, GPZR(Rt).W);
         }
 
     }
@@ -571,8 +572,8 @@ namespace arm {
 
         switch (option) {
             case 0b010: { // UXTW
-                u32 offset = GPR[Rm].X;
-                this->m_addressSpace->write(GPR[Rn].W + offset, 1U << scale, GPR[Rt].W);
+                u32 offset = GPZR(Rm).X;
+                this->m_addressSpace->write(GPSP(Rn).W + offset, 1U << scale, GPZR(Rt).W);
             } break;
             case 0b011: { // LSL
                 u8 shiftAmount = 0;
@@ -583,17 +584,17 @@ namespace arm {
                 else if (scale == 0b11)
                     shiftAmount = 3;
 
-                s32 offset = GPR[Rm].X << shiftAmount;
-                this->m_addressSpace->write(GPR[Rn].W + offset, 1U << scale, GPR[Rt].W);
+                s32 offset = GPZR(Rm).X << shiftAmount;
+                this->m_addressSpace->write(GPSP(Rn).W + offset, 1U << scale, GPZR(Rt).W);
 
             } break;
             case 0b110: { // SXTW
-                s32 offset = GPR[Rm].X;
-                this->m_addressSpace->write(GPR[Rn].W + offset, 1U << scale, GPR[Rt].W);
+                s32 offset = GPZR(Rm).X;
+                this->m_addressSpace->write(GPSP(Rn).W + offset, 1U << scale, GPZR(Rt).W);
             } break;
             case 0b111: { // SXTX
-                s64 offset = extendSign(GPR[Rm].W, 32, 64);
-                this->m_addressSpace->write(GPR[Rn].W + offset, 1U << scale, GPR[Rt].W);
+                s64 offset = extendSign(GPZR(Rm).W, 32, 64);
+                this->m_addressSpace->write(GPSP(Rn).W + offset, 1U << scale, GPZR(Rt).W);
             }
         }
 
@@ -605,25 +606,25 @@ namespace arm {
 
         if (extract<BITS(24:25)>(inst) == 0b00 && extract<BITS(10:11)>(inst) == 0b01) { // Post-index
             s64 offset = extendSign(imm9, 9, 64);
-            GPR[Rt] = this->m_addressSpace->read(GPR[Rn].W, 1U << scale);
+            GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W, 1U << scale);
 
             if (scale == 0b10)
-                GPR[Rn].X += offset;
+                GPSP(Rn).X += offset;
             else
-                GPR[Rn].W += offset;
+                GPSP(Rn).W += offset;
         } else if (extract<BITS(24:25)>(inst) == 0b00 && extract<BITS(10:11)>(inst) == 0b11) { // Pre-index {
             s64 offset = extendSign(imm9, 9, 64);
 
             if (scale == 0b10)
-                GPR[Rn].X += offset;
+                GPSP(Rn).X += offset;
             else
-                GPR[Rn].W += offset;
+                GPSP(Rn).W += offset;
 
-            GPR[Rt] = this->m_addressSpace->read(GPR[Rn].W, 1U << scale);
+            GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W, 1U << scale);
         } else if (extract<BITS(24:25)>(inst) == 0b01) { // Unsigned offset
             s64 offset = extendSign(extract<BITS(10:21)>(inst), 12, 64) << scale;
 
-            GPR[Rt] = this->m_addressSpace->read(GPR[Rn].W + offset, 1U << scale);
+            GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W + offset, 1U << scale);
         }
     }
 
@@ -635,8 +636,8 @@ namespace arm {
 
         switch (option) {
             case 0b010: { // UXTW
-                u32 offset = GPR[Rm].X;
-                GPR[Rt] = this->m_addressSpace->read(GPR[Rn].W + offset, 1U << scale);
+                u32 offset = GPZR(Rm).X;
+                GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W + offset, 1U << scale);
             } break;
             case 0b011: { // LSL
                 u8 shiftAmount = 0;
@@ -647,17 +648,17 @@ namespace arm {
                 else if (scale == 0b11)
                     shiftAmount = 3;
 
-                s32 offset = GPR[Rm].X << shiftAmount;
-                GPR[Rt] = this->m_addressSpace->read(GPR[Rn].W + offset, 1U << scale);
+                s32 offset = GPZR(Rm).X << shiftAmount;
+                GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W + offset, 1U << scale);
 
             } break;
             case 0b110: { // SXTW
-                s32 offset = GPR[Rm].X;
-                GPR[Rt] = this->m_addressSpace->read(GPR[Rn].W + offset, 1U << scale);
+                s32 offset = GPZR(Rm).X;
+                GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W + offset, 1U << scale);
             } break;
             case 0b111: { // SXTX
-                s64 offset = extendSign(GPR[Rm].W, 32, 64);
-                GPR[Rt] = this->m_addressSpace->read(GPR[Rn].W + offset, 1U << scale);
+                s64 offset = extendSign(GPZR(Rm).W, 32, 64);
+                GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W + offset, 1U << scale);
             }
         }
     }

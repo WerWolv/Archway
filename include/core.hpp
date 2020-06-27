@@ -5,6 +5,7 @@
 #include "register.hpp"
 #include "address_space.hpp"
 #include <functional>
+#include <optional>
 
 namespace arm {
 
@@ -75,12 +76,6 @@ namespace arm {
         u8 N : 1;
     };
 
-    #define CURR_EL PSTATE.EL
-    #define EL0 0
-    #define EL1 1
-    #define EL2 2
-    #define EL3 3
-
     constexpr u8 NumBreakpoints = 0x10;
     constexpr u8 TemporarySteppingBreakpointId = NumBreakpoints;
 
@@ -93,7 +88,7 @@ namespace arm {
         void tick();
 
         [[nodiscard]] inst_t prefetch(const addr_t &pc) const;
-        [[nodiscard]] InstructionHandler decode(const inst_t &instruction) const;
+        [[nodiscard]] InstructionHandler decode(const inst_t &instruction);
         void execute(const InstructionHandler &type, const inst_t &instruction);
 
         /* Debug commands */
@@ -105,6 +100,14 @@ namespace arm {
         void removeBreakpoint(u8 breakpointId);
         void singleStep();
         void dumpRegisters();
+
+        constexpr core::RegisterDouble& GPZR(u8 R) {
+            return GPR[R];
+        }
+
+        constexpr core::RegisterDouble& GPSP(u8 R) {
+            return GPR[R < 31 ? R : 32 + PSTATE.EL];
+        }
 
     private:
         void setNZCVFlags(u32 oldValue, u32 newValue);
@@ -123,7 +126,6 @@ namespace arm {
         /* Core Registers */
 
         core::GPRegister GPR;
-        core::ELRegister SP;
         core::RegisterSingle PC;
 
         PSTATE PSTATE;

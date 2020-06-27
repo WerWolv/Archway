@@ -87,46 +87,34 @@ namespace arm::core {
         ZRegisterImpl<u32> X;
     };
 
-    class ELRegister;
-
-    struct EL : public Register {
-    public:
-        EL() : m_el(0), m_value(0) {}
-        EL(u8 el, u64 value) : m_el(el), m_value(value) { }
-
-        const u8 getEL() const { return this->m_el; }
-
-    private:
-        friend ELRegister;
-
-        virtual operator u64() const override { return this->m_value; }
-        virtual EL& operator=(u64 value) override { this->m_value = value; return *this; }
-
-        u8 m_el;
-        u64 m_value;
-    };
-
     class ELRegister {
     public:
-        u64& operator[](u8 el) {
+        ELRegister() {
+            for (u8 i = 0; i < 4; i++)
+                this->m_reg[i] = 0;
+        }
+        constexpr core::RegisterDouble& operator[](u8 el) {
             return this->m_reg[el];
         }
     private:
-        u64 m_reg[4];
+        core::RegisterDouble m_reg[4];
     };
 
 
     class GPRegister {
     public:
-        core::RegisterDouble& operator[](u8 R) {
+        constexpr core::RegisterDouble& operator[](u8 R) {
             if (R < 31)
                 return GPR[R];
+            else if (R >= 32 && R <= 35)
+                return SP[R - 32];
             else
                 return ZR;
         }
     private:
         core::RegisterDouble GPR[31];
         core::ZRegister ZR;
+        core::ELRegister SP;
     };
 
 }
