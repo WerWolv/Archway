@@ -9,6 +9,8 @@
 
 namespace arm {
 
+    namespace ui { class Window; }
+
     #define INSTRUCTION(mask, pattern, name) InstructionPattern{ mask, pattern, &Core::name, #name }
     #define INSTRUCTION_DECL(name) void name(const inst_t &inst, const u8 &Rd, const u8 &Rn, const u8 &Rm, const bool &sf, const u8 &imm3, const u8 &imm6, const u16 &imm12, const u8 &shift, const u8 &size)
     #define INSTRUCTION_DEF(name) void Core::name(const inst_t &inst, const u8 &Rd, const u8 &Rn, const u8 &Rm, const bool &sf, const u8 &imm3, const u8 &imm6, const u16 &imm12, const u8 &shift, const u8 &size)
@@ -110,6 +112,8 @@ namespace arm {
         }
 
     private:
+        friend class arm::ui::Window;
+
         void setNZCVFlags(u32 oldValue, u32 newValue);
         void setNZCVFlags(u64 oldValue, u64 newValue);
         [[nodiscard]] bool doesConditionHold(u8 cond) const;
@@ -122,6 +126,7 @@ namespace arm {
         bool m_broken = false;
         bool m_debugMode = false;
         std::array<std::optional<addr_t>, NumBreakpoints + 1> m_breakpoints;
+        InstructionPattern m_currInstruction;
 
         /* Core Registers */
 
@@ -186,7 +191,7 @@ namespace arm {
         INSTRUCTION_DECL(SUBS_EXTENDED_REGISTER);
         INSTRUCTION_DECL(ORR_IMMEDIATE);
         INSTRUCTION_DECL(ORR_SHIFTED_REGISTER);
-        INSTRUCTION_DECL(MOVZ);
+        INSTRUCTION_DECL(MOVNZK);
         INSTRUCTION_DECL(B);
         INSTRUCTION_DECL(B_COND);
         INSTRUCTION_DECL(BL);
@@ -202,6 +207,7 @@ namespace arm {
         INSTRUCTION_DECL(STR_REGISTER);
         INSTRUCTION_DECL(LDR_IMMEDIATE);
         INSTRUCTION_DECL(LDR_REGISTER);
+        INSTRUCTION_DECL(CBZ);
 
     };
 

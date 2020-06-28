@@ -1,18 +1,21 @@
 #include "core.hpp"
 #include <bit>
+#include <thread>
+#include <chrono>
+
+using namespace std::chrono_literals;
 
 namespace arm {
 
     Core::Core(AddressSpace *addressSpace) : m_addressSpace(addressSpace) {
-        PC = 0x0000;
+        this->m_halted = true;
     }
 
     constexpr auto Core::getInstructionPatternLUT() const {
-        std::array lut {
+        constexpr std::array lut {
             INSTRUCTION(0b1111'1111'1111'1111'1111'1111'1111'1111, 0b1101'0101'0000'0011'0010'0000'0001'1111, NOP),
             INSTRUCTION(0b0111'1111'1000'0000'0000'0000'0000'0000, 0b0011'0010'0000'0000'0000'0000'0000'0000, ORR_IMMEDIATE), // MOV Alias
             INSTRUCTION(0b0111'1111'0010'0000'0000'0000'0000'0000, 0b0010'1010'0000'0000'0000'0000'0000'0000, ORR_SHIFTED_REGISTER), // MOV Alias
-            INSTRUCTION(0b0111'1111'1000'0000'0000'0000'0000'0000, 0b0101'0010'1000'0000'0000'0000'0000'0000, MOVZ),
             INSTRUCTION(0b1111'1100'0000'0000'0000'0000'0000'0000, 0b0001'0100'0000'0000'0000'0000'0000'0000, B),
             INSTRUCTION(0b1111'1111'0000'0000'0000'0000'0001'0000, 0b0101'0100'0000'0000'0000'0000'0000'0000, B_COND),
             INSTRUCTION(0b1111'1100'0000'0000'0000'0000'0000'0000, 0b1001'0100'0000'0000'0000'0000'0000'0000, BL),
@@ -33,8 +36,10 @@ namespace arm {
             INSTRUCTION(0b0111'1111'0010'0000'0000'0000'0000'0000, 0b0110'1010'0000'0000'0000'0000'0000'0000, ANDS_SHIFTED_REGISTER),
             INSTRUCTION(0b1011'1100'1110'0000'0000'0000'0000'0000, 0b1011'1000'0000'0000'0000'0000'0000'0000, STR_IMMEDIATE),
             INSTRUCTION(0b1011'1111'1110'0000'0000'1100'0000'0000, 0b1011'1000'0010'0000'0000'1000'0000'0000, STR_REGISTER),
-            INSTRUCTION(0b1011'1111'1110'0000'0000'1100'0000'0000, 0b1011'1000'0100'0000'0000'0010'0000'0000, LDR_IMMEDIATE),
-            INSTRUCTION(0b1011'1111'1110'0000'0000'1100'0000'0000, 0b1011'1000'0110'0000'0000'1000'0000'0000, LDR_REGISTER)
+            INSTRUCTION(0b1011'1100'1110'0000'0000'0000'0000'0000, 0b1011'1000'0100'0000'0000'0000'0000'0000, LDR_IMMEDIATE),
+            INSTRUCTION(0b1011'1111'1110'0000'0000'1100'0000'0000, 0b1011'1000'0110'0000'0000'1000'0000'0000, LDR_REGISTER),
+            INSTRUCTION(0b0111'1110'0000'0000'0000'0000'0000'0000, 0b0011'0100'0000'0000'0000'0000'0000'0000, CBZ),
+            INSTRUCTION(0b0001'1111'1000'0000'0000'0000'0000'0000, 0b0001'0010'1000'0000'0000'0000'0000'0000, MOVNZK)
             //INSTRUCTION(0b0111'1111'1110'0000'0000'1100'0001'0000, 0b0111'1010'0100'0000'0000'1000'0000'0000, CCMP_IMMEDIATE),
         };
 
@@ -46,15 +51,17 @@ namespace arm {
     }
 
     InstructionHandler Core::decode(const inst_t &instruction) {
-        for (const auto& entry : getInstructionPatternLUT()) {
+        for (const InstructionPattern& entry : getInstructionPatternLUT()) {
             if ((instruction & entry.mask) == entry.pattern) {
-                Logger::debug("[%08llx] %s", PC.W, entry.name);
+                this->m_currInstruction = entry;
+                //Logger::debug("[%08llx] %s (0x%lX)", PC.W, entry.name, instruction);
                 return entry.type;
             }
         }
 
-        dumpRegisters();
-        Logger::fatal("Invalid instruction 0x%08llx!", instruction);
+        /*dumpRegisters();
+        Logger::fatal("Invalid instruction 0x%08llx!", instruction);*/
+        this->halt();
 
         return nullptr;
     }
@@ -76,7 +83,9 @@ namespace arm {
     }
 
     void Core::reset() {
+        PC = 0x10000;
         this->m_halted = false;
+        this->m_currInstruction = { 0 };
     }
 
     void Core::halt() {
@@ -84,11 +93,15 @@ namespace arm {
     }
 
     void Core::tick() {
-        if (this->m_halted || (this->m_broken && !this->m_breakpoints[TemporarySteppingBreakpointId].has_value()))
+        if (this->m_halted || (this->m_broken && !this->m_breakpoints[TemporarySteppingBreakpointId].has_value())) {
             return;
+        }
 
         const inst_t instruction = this->prefetch(PC);
         const InstructionHandler handler = this->decode(instruction);
+
+        if (handler == nullptr)
+            return;
 
         PC += InstructionWidth;
         this->execute(handler, instruction);
@@ -121,6 +134,7 @@ namespace arm {
 
     void Core::exitDebugMode() {
         this->m_debugMode = false;
+        this->m_broken = false;
     }
 
     void Core::breakCore() {
@@ -150,7 +164,7 @@ namespace arm {
     }
 
     void Core::singleStep() {
-        this->m_breakpoints[TemporarySteppingBreakpointId] = PC + InstructionWidth;
+        this->m_breakpoints[TemporarySteppingBreakpointId] = PC.W + InstructionWidth;
     }
 
     void Core::setNZCVFlags(u32 oldValue, u32 newValue) {
@@ -259,14 +273,39 @@ namespace arm {
         }
     }
 
-    INSTRUCTION_DEF(MOVZ) {
-        u16 imm16 = extract<BITS(5:20)>(inst);
+    INSTRUCTION_DEF(MOVNZK) {
+        /*u16 imm16 = extract<BITS(5:20)>(inst);
         u8 hw = extract<BITS(21:22)>(inst);
 
         if (sf == 0)
             GPZR(Rd).X = u32(imm16) << (hw << 4);
         else
-            GPZR(Rd).W = u64(imm16) << (hw << 4);
+            GPZR(Rd).W = u64(imm16) << (hw << 4);*/
+
+        u16 imm16 = extract<BITS(5:20)>(inst);
+        u8 hw = extract<BITS(21:22)>(inst);
+        u8 opc = extract<BITS(29:30)>(inst);
+
+        switch (opc) {
+            case 0b00:
+                if (sf == 0)
+                    GPZR(Rd).W = ~u32(imm16);
+                else
+                    GPZR(Rd).X = ~u64(imm16);
+                break;
+            case 0b10:
+                if (sf == 0)
+                    GPZR(Rd).X = u32(imm16) << (hw << 4);
+                else
+                    GPZR(Rd).W = u64(imm16) << (hw << 4);
+                break;
+            case 0b11:
+                if (sf == 0)
+                    GPZR(Rd).W = (GPZR(Rd).W & 0xFFFF) | imm16;
+                else
+                    GPZR(Rd).X = (GPZR(Rd).X & 0xFFFF) | imm16;
+                break;
+        }
     }
 
     INSTRUCTION_DEF(B) {
@@ -661,6 +700,15 @@ namespace arm {
                 GPZR(Rt) = this->m_addressSpace->read(GPSP(Rn).W + offset, 1U << scale);
             }
         }
+    }
+
+    INSTRUCTION_DEF(CBZ) {
+        u8 Rt = extract<BITS(0:4)>(inst);
+        u32 imm19 = extract<BITS(5:23)>(inst);
+        u64 offset = extendSign(imm19 << 2, 21, 64) - InstructionWidth;
+
+        if (GPZR(Rt) == 0)
+            PC += offset;
     }
 
 }

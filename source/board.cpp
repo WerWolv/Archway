@@ -35,12 +35,10 @@ namespace arm {
 
     void Board::powerUp() {
         this->m_powered = true;
-
-        this->run();
     }
 
-    void Board::run() {
-        while (this->m_powered) {
+    void Board::tick() {
+        if (this->m_powered) {
             this->CPU.tick();
 
             for (u8 coreId = 0; coreId < this->CPU.getCoreCount(); coreId++) {

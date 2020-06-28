@@ -16,16 +16,16 @@ namespace arm {
         void powerUp();
         void reset();
 
-    private:
+        void tick();
+
         Cpu CPU = Cpu(1);
         Device *BROM;
         Device *IRAM;
         Device *DRAM;
         Device *FLASH;
 
+    private:
         bool m_powered = false;
-
-        void run();
     };
 
 }

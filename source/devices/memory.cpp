@@ -11,8 +11,6 @@ namespace arm::dev {
     }
 
     u64 Memory::read(offset_t offset, size_t size) {
-        if ((offset % size) != 0)
-            Logger::warn("Unaligned access to BASE + %016llx (%u bytes)!", offset, size);
         if (offset + size >= this->getSize())
             Logger::fatal("Tried to access an invalid address at BASE + %016llx!", offset);
         if (size > sizeof(u64))
@@ -25,8 +23,6 @@ namespace arm::dev {
     }
 
     void Memory::write(offset_t offset, size_t size, u64 value) {
-        if ((offset % size) != 0)
-            Logger::warn("Unaligned access to BASE + %016llx (%u bytes)!", offset, size);
         if (offset + size >= this->getSize())
             Logger::fatal("Tried to access an invalid address at BASE + %016llx!", offset);
         if (size > sizeof(u64))
