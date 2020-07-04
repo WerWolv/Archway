@@ -1,6 +1,7 @@
 #include "board.hpp"
 
 #include "devices/memory.hpp"
+#include "devices/uart.hpp"
 
 namespace arm {
 
@@ -10,16 +11,16 @@ namespace arm {
         DRAM  = new dev::Memory(2_MiB);
         FLASH = new dev::Memory(100_MiB);
 
+        UART1 = new dev::UART();
+
         CPU.addDeviceToAddressSpace(BROM,  0x0000'0000'0000'0000);
         CPU.addDeviceToAddressSpace(IRAM,  0x1000'0000'0000'0000);
         CPU.addDeviceToAddressSpace(DRAM,  0x2000'0000'0000'0000);
         CPU.addDeviceToAddressSpace(FLASH, 0x3000'0000'0000'0000);
+        CPU.addDeviceToAddressSpace(UART1, 0x8000'0000'0000'0000);
 
-        Device::as<dev::Memory>(BROM)->load("test.elf");
-        /*Device::as<dev::Memory>(BROM)->load({
-            0xAA1E03E7,
-            0x94000001
-        });*/
+        //Device::as<dev::Memory>(BROM)->load("test.elf");
+        Device::as<dev::Memory>(BROM)->load((const u8*)"\x00\x00\x80\xd2\x00\x00\xa0\xf2\x00\x00\xc0\xf2\x00\x00\xf0\xf2\x21\x08\x80\xd2\x01\x00\x00\xf9", 24);
 
         this->CPU.reset();
     }

@@ -24,6 +24,8 @@ namespace arm {
         Device *DRAM;
         Device *FLASH;
 
+        Device *UART1;
+
     private:
         bool m_powered = false;
     };

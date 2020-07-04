@@ -19,6 +19,7 @@ add_executable(ARMv8
         source/board.cpp
         source/cpu.cpp
         source/devices/memory.cpp
+        source/devices/uart.cpp
         source/ui/window.cpp)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fconcepts")
