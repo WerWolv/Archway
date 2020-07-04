@@ -17,12 +17,12 @@ namespace arm::core {
     };
 
     struct RegisterDouble : public Register {
-        RegisterDouble() { this->W = 0; }
-        RegisterDouble(u64 value) { this->W = value; }
+        RegisterDouble() { this->X = 0; }
+        RegisterDouble(u64 value) { this->X = value; }
 
         union {
-            u64 W;
-            u32 X;
+            u64 X;
+            u32 W;
         };
 
         virtual operator u64() const override { return this->W; }
@@ -30,35 +30,35 @@ namespace arm::core {
     };
 
     struct RegisterSingle : public Register {
-        RegisterSingle() { this->W = 0; }
-        RegisterSingle(u64 value) { this->W = value; }
+        RegisterSingle() { this->X = 0; }
+        RegisterSingle(u64 value) { this->X = value; }
 
-        u64 W;
+        u64 X;
 
-        virtual operator u64() const override { return this->W; }
+        virtual operator u64() const override { return this->X; }
 
-        virtual Register& operator=(u64 value) override { this->W = value; return *this; }
+        virtual Register& operator=(u64 value) override { this->X = value; return *this; }
 
         auto operator+(const u64 other) {
-            RegisterSingle reg { this->W + other };
+            RegisterSingle reg { this->X + other };
 
             return reg;
         }
 
         auto operator-(const u64 other) {
-            RegisterSingle reg { this->W - other };
+            RegisterSingle reg { this->X - other };
 
             return reg;
         }
 
         auto operator+=(const u64 other) {
-            this->W += other;
+            this->X += other;
 
             return *this;
         }
 
         auto operator-=(const u64 other) {
-            this->W -= other;
+            this->X -= other;
 
             return *this;
         }
@@ -83,8 +83,8 @@ namespace arm::core {
         virtual operator u64() const override { return 0; }
         virtual ZRegister& operator=(u64 value) override { return *this; }
 
-        ZRegisterImpl<u64> W;
-        ZRegisterImpl<u32> X;
+        ZRegisterImpl<u32> W;
+        ZRegisterImpl<u64> X;
     };
 
     class ELRegister {

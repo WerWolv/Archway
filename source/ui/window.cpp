@@ -80,6 +80,13 @@ namespace arm::ui {
                 this->m_board.CPU.getCore(coreId).breakCore();
             }
         }
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) {
+            for (u8 coreId = 0; coreId < this->m_board.CPU.getCoreCount(); coreId++) {
+                this->m_board.CPU.getCore(coreId).reset();
+            }
+        }
+
         ImGui::NewLine();
         if (ImGui::Button("Step Instruction")) {
             for (u8 coreId = 0; coreId < this->m_board.CPU.getCoreCount(); coreId++)
@@ -102,14 +109,14 @@ namespace arm::ui {
 
         ImGui::NewLine();
 
-        ImGui::Text("PC  : 0x%016lx", this->m_board.CPU.getCore(0).PC.W);
-        ImGui::Text("SP  : 0x%016lx", this->m_board.CPU.getCore(0).GPR[32].W);
-        ImGui::Text("LR  : 0x%016lx", this->m_board.CPU.getCore(0).GPR[30].W);
+        ImGui::Text("PC  : 0x%016llx", this->m_board.CPU.getCore(0).PC.X);
+        ImGui::Text("SP  : 0x%016llx", this->m_board.CPU.getCore(0).GPR[32].X);
+        ImGui::Text("LR  : 0x%016llx", this->m_board.CPU.getCore(0).GPR[30].X);
 
         ImGui::NewLine();
 
         for (u8 i = 0; i < 30; i++)
-            ImGui::Text("W%02d : 0x%016lx", i, this->m_board.CPU.getCore(0).GPR[i].W);
+            ImGui::Text("W%02d : 0x%016llx", i, this->m_board.CPU.getCore(0).GPR[i].X);
 
         ImGui::End();
     }
