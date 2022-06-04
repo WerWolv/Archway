@@ -51,7 +51,8 @@ namespace arm::dev {
         addr_t address = 0;
 
         if (instructions.size() * InstructionWidth > this->getSize())
-            Logger::fatal("Instructions with total size of 0x%lX does not fit into memory region of size 0x%lX!");
+            Logger::fatal("Instructions with total size of 0x%lX does not fit into memory region of size 0x%lX!", instructions.size() * InstructionWidth,
+                         this->getSize());
 
         for (const auto& instruction : instructions) {
             this->write(address, InstructionWidth, instruction);
